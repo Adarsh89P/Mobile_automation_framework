@@ -1,0 +1,7 @@
+# TestNG discovers listeners on the classpath through this file (ServiceLoader).
+#
+# Registering here rather than in each suite XML means a new suite file gets retries,
+# evidence capture and reporting automatically - there is no way to add a suite and
+# forget the listeners, which is how reporting silently degrades over time.
+com.adarsh.listeners.RetryTransformer
+com.adarsh.listeners.TestListener

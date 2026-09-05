@@ -1,0 +1,16 @@
+[
+  {
+    "_comment": "Public demo accounts shipped with Sauce Labs My Demo App. Verified against the strings in the app's own JS bundle. Not secrets — real credentials are read from environment variables.",
+    "id": "standard",
+    "username": "bob@example.com",
+    "password": "10203040",
+    "locked": false
+  },
+  {
+    "_comment": "The backend rejects this account on purpose, with 'Sorry, this user has been locked out.'",
+    "id": "locked",
+    "username": "alice@example.com",
+    "password": "10203040",
+    "locked": true
+  }
+]

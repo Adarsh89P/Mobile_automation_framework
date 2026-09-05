@@ -1,0 +1,37 @@
+[
+  {
+    "id": "unknown-credentials",
+    "description": "A well-formed address that belongs to no account",
+    "username": "not.a.user@example.com",
+    "password": "wrong-password-123",
+    "expectedError": "Provided credentials do not match any user in this service."
+  },
+  {
+    "id": "correct-user-wrong-password",
+    "description": "A real account with the wrong password — must fail the same way, without hinting that the username was valid",
+    "username": "bob@example.com",
+    "password": "not-the-password",
+    "expectedError": "Provided credentials do not match any user in this service."
+  },
+  {
+    "id": "locked-out-user",
+    "description": "A valid account the backend has disabled",
+    "username": "alice@example.com",
+    "password": "10203040",
+    "expectedError": "Sorry, this user has been locked out."
+  },
+  {
+    "id": "empty-username",
+    "description": "Client-side validation fires before any request is made",
+    "username": "",
+    "password": "10203040",
+    "expectedError": "Username is required"
+  },
+  {
+    "id": "empty-password",
+    "description": "Client-side validation on the password field",
+    "username": "bob@example.com",
+    "password": "",
+    "expectedError": "Password is required"
+  }
+]

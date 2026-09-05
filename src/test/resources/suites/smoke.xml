@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+
+<!--
+  Smoke: the build-gate suite. Runs on every pull request.
+  Kept deliberately small — a gate nobody waits for is a gate everybody bypasses.
+-->
+<suite name="Smoke" verbose="1" parallel="none">
+
+    <test name="Smoke - Android">
+        <groups>
+            <run>
+                <include name="smoke"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="com.adarsh.tests.AppLaunchTest"/>
+            <class name="com.adarsh.tests.LoginTest"/>
+        </classes>
+    </test>
+
+</suite>

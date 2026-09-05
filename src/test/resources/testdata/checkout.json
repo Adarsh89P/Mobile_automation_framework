@@ -1,0 +1,20 @@
+{
+  "_comment": "Template for the checkout forms. The test overwrites the customer name with a Faker value so repeated runs do not create identical orders; everything else is stable so the review screen can be asserted against known text.",
+  "shippingAddress": {
+    "fullName": "Placeholder Name",
+    "addressLine1": "1 Automation Way",
+    "addressLine2": "Suite 200",
+    "city": "San Francisco",
+    "stateRegion": "CA",
+    "zipCode": "94105",
+    "country": "United States"
+  },
+  "paymentCard": {
+    "_comment": "A well-known Visa test number that no payment network will authorise. A real card would come from the environment, never from a committed file.",
+    "nameOnCard": "Placeholder Name",
+    "cardNumber": "4111 1111 1111 1111",
+    "expiryDate": "03/27",
+    "securityCode": "123"
+  },
+  "useSameAddress": true
+}

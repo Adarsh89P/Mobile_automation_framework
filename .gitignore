@@ -1,0 +1,48 @@
+# --- Build output ---
+target/
+!target/logs/.gitkeep
+
+# --- Reporting ---
+allure-results/
+allure-report/
+.allure/
+screenshots/
+recordings/
+healing-report.json
+
+# --- Tooling artefacts ---
+# The allure-maven plugin downloads the Allure CLI into the project root.
+.allure/
+# AspectJ writes a crash dump here when the weaver cannot read a class file.
+ajcore.*.txt
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Secrets / local env ---
+.env
+*.env.local
+local.properties
+
+# --- App binaries ---
+# ApiDemos-debug.apk (4.7 MB) IS committed, so a fresh clone can run the smoke suite.
+# Larger binaries are fetched on demand by scripts/fetch-apps.sh.
+src/test/resources/apps/Android-MyDemoAppRN.apk
+src/test/resources/apps/*.part
+src/test/resources/apps/*.app/
+*.aab
+*.ipa
+*.zip
+
+# --- IDE / OS ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+.DS_Store
+Thumbs.db

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logging for the framework.
+
+  The important part is the RoutingAppender. Under parallel="tests" every device writes to
+  the same console at the same time, and a single interleaved log file is close to useless
+  for triage. Routing on the ThreadContext value that BaseTest stamps gives each device its
+  own file in target/logs, so a failure on one emulator can be read start to finish without
+  the other emulators' lines running through it.
+
+  The console keeps everything, prefixed with the device, so a human watching the run still
+  sees one stream.
+-->
+<Configuration status="WARN" name="mobile-automation-framework">
+
+    <Properties>
+        <!-- %X pulls values out of the ThreadContext that BaseTest populates per test. -->
+        <Property name="CONSOLE_PATTERN">%d{HH:mm:ss.SSS} %highlight{%-5level} [%X{device}] %X{testName} - %msg%n</Property>
+        <Property name="FILE_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%t] %logger{1.} %X{testName} - %msg%n%throwable</Property>
+        <Property name="LOG_DIR">target/logs</Property>
+    </Properties>
+
+    <Appenders>
+
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="${CONSOLE_PATTERN}"/>
+        </Console>
+
+        <!-- The whole run, in order, regardless of device. -->
+        <RollingFile name="CombinedFile"
+                     fileName="${LOG_DIR}/test-run.log"
+                     filePattern="${LOG_DIR}/archive/test-run-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout pattern="${FILE_PATTERN}"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="10 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="10"/>
+        </RollingFile>
+
+        <!--
+          One file per device. The route key is the ThreadContext 'device' value; the
+          default route catches anything logged outside a test (suite setup, the Appium
+          server manager) so no line is ever silently dropped.
+        -->
+        <Routing name="PerDeviceFile">
+            <Routes pattern="$${ctx:device}">
+                <Route key="$${ctx:device}">
+                    <RollingFile name="Framework-${ctx:device}"
+                                 fileName="${LOG_DIR}/framework.log"
+                                 filePattern="${LOG_DIR}/archive/framework-%d{yyyy-MM-dd}-%i.log.gz">
+                        <PatternLayout pattern="${FILE_PATTERN}"/>
+                        <Policies>
+                            <SizeBasedTriggeringPolicy size="10 MB"/>
+                        </Policies>
+                    </RollingFile>
+                </Route>
+                <Route>
+                    <RollingFile name="Device-${ctx:device}"
+                                 fileName="${LOG_DIR}/device-${ctx:device}.log"
+                                 filePattern="${LOG_DIR}/archive/device-${ctx:device}-%d{yyyy-MM-dd}-%i.log.gz">
+                        <PatternLayout pattern="${FILE_PATTERN}"/>
+                        <Policies>
+                            <SizeBasedTriggeringPolicy size="10 MB"/>
+                        </Policies>
+                    </RollingFile>
+                </Route>
+            </Routes>
+        </Routing>
+
+    </Appenders>
+
+    <Loggers>
+
+        <Logger name="com.adarsh" level="debug" additivity="false">
+            <AppenderRef ref="Console" level="info"/>
+            <AppenderRef ref="CombinedFile"/>
+            <AppenderRef ref="PerDeviceFile"/>
+        </Logger>
+
+        <!--
+          Selenium and Appium log every HTTP round trip at INFO, which buries the framework's
+          own output. They stay at WARN on the console but are kept at DEBUG in the combined
+          file, where the wire-level detail is worth having when a session will not start.
+        -->
+        <Logger name="org.openqa.selenium" level="warn" additivity="false">
+            <AppenderRef ref="Console" level="error"/>
+            <AppenderRef ref="CombinedFile"/>
+        </Logger>
+        <Logger name="io.appium" level="warn" additivity="false">
+            <AppenderRef ref="Console" level="error"/>
+            <AppenderRef ref="CombinedFile"/>
+        </Logger>
+        <Logger name="org.testng" level="warn"/>
+
+        <Root level="info">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="CombinedFile"/>
+        </Root>
+
+    </Loggers>
+
+</Configuration>

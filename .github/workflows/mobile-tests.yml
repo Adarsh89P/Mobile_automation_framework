@@ -1,0 +1,279 @@
+name: Mobile Tests
+
+# Two audiences, two cadences:
+#   - a pull request needs a fast, trustworthy yes/no  -> @smoke only
+#   - the nightly run has time to be thorough          -> @regression
+# Anything slower than a few minutes on a PR gets bypassed by the people it is meant to
+# protect, so the gate is deliberately narrow and the depth happens overnight.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # 02:00 UTC nightly. Cron on GitHub is best-effort and can be delayed under load;
+    # this job is not something anyone waits on, so that is acceptable.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Suite to run'
+        required: true
+        default: 'smoke'
+        type: choice
+        options: [smoke, regression, mobile-native, parallel-devices]
+      api_level:
+        description: 'Android API level'
+        required: true
+        default: '34'
+        type: string
+      record_video:
+        description: 'Record video of failed tests'
+        required: false
+        default: false
+        type: boolean
+
+# A second push to the same PR makes the first run irrelevant. Cancelling it frees the
+# runner instead of burning minutes on an answer nobody will read.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '17'
+  NODE_VERSION: '20'
+  APPIUM_VERSION: '2.11.3'
+  UIAUTOMATOR2_VERSION: '3.7.6'
+
+jobs:
+  test:
+    name: ${{ github.event_name == 'schedule' && 'Regression' || 'Smoke' }} - Android API ${{ github.event.inputs.api_level || '34' }}
+    runs-on: ubuntu-latest
+    # The emulator is the slow part. Without a cap, a hung AVD holds a runner for six hours.
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+          # Caches ~/.m2 keyed on the pom, so dependency resolution is a few seconds
+          # rather than a few minutes on every run.
+          cache: maven
+
+      - name: Set up Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Appium 2 and the UiAutomator2 driver
+        # Both pinned. An unpinned `npm i -g appium` means the server can change under you
+        # overnight, and "it broke and nobody touched it" is the worst kind of red build.
+        run: |
+          npm install -g appium@${{ env.APPIUM_VERSION }}
+          # The short name installs 'latest'; pinning a version needs the npm source form.
+          appium driver install --source=npm appium-uiautomator2-driver@${{ env.UIAUTOMATOR2_VERSION }}
+          appium --version
+          appium driver list --installed
+
+      # The framework starts and stops the Appium server itself (AppiumServerManager), so
+      # there is no background server to launch here and nothing to leak if the job dies.
+
+      - name: Cache the downloaded app binaries
+        uses: actions/cache@v4
+        with:
+          path: src/test/resources/apps
+          # Keyed on the fetch script: change the pinned app version and the cache misses,
+          # which is exactly when it should.
+          key: apps-${{ hashFiles('scripts/fetch-apps.sh') }}
+
+      - name: Download the app binaries
+        run: bash scripts/fetch-apps.sh
+
+      - name: Enable KVM
+        # Without KVM the emulator falls back to software rendering and is roughly an order
+        # of magnitude slower - slow enough that tests start timing out for no real reason.
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Cache the AVD snapshot
+        uses: actions/cache@v4
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-${{ github.event.inputs.api_level || '34' }}
+
+      - name: Create the AVD and generate a snapshot
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ github.event.inputs.api_level || 34 }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          # Booting once and snapshotting turns a ~4 minute cold boot into a ~30 second
+          # restore on every later run.
+          script: echo "AVD snapshot created"
+
+      - name: Run the ${{ github.event_name == 'schedule' && 'regression' || 'smoke' }} suite
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ github.event.inputs.api_level || 34 }}
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          force-avd-creation: false
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          # Window animations make elements appear "present but not yet interactable" and
+          # are a classic source of mobile flakiness. Off at the OS level, belt and braces
+          # with the disableWindowAnimation capability the driver already sets.
+          disable-animations: true
+          script: |
+            adb devices -l
+            mvn -B test \
+              -Dsuite=${{ github.event.inputs.suite || (github.event_name == 'schedule' && 'regression' || 'smoke') }} \
+              -Dplatform=android \
+              -Dexecution=local \
+              -Ddevice.name=emulator-5554 \
+              -Dudid=emulator-5554 \
+              -Drecord.video.on.failure=${{ github.event.inputs.record_video || false }}
+
+      # ---------------------------------------------------------------- reporting
+      #
+      # Everything below runs with if: always(). A failed test run is precisely when the
+      # report matters, and a reporting step that only runs on success is a reporting step
+      # that never runs when you need it.
+
+      - name: Restore the Allure history from GitHub Pages
+        if: always()
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Generate the Allure report
+        if: always()
+        run: |
+          npm install -g allure-commandline@2.29.0
+          # Carrying the previous run's history into this run's results is what produces the
+          # trend charts. Without it every report looks like the first run ever.
+          if [ -d gh-pages/history ]; then
+            mkdir -p allure-results/history
+            cp -r gh-pages/history/. allure-results/history/
+          fi
+          # Executor metadata makes each report say which CI run produced it. It has to be
+          # in the RESULTS directory before generate - allure reads it as an input, not as
+          # something you can drop into the finished report.
+          mkdir -p allure-results
+          cat > allure-results/executor.json <<EOF
+          {
+            "name": "GitHub Actions",
+            "type": "github",
+            "buildOrder": ${{ github.run_number }},
+            "buildName": "#${{ github.run_number }}",
+            "buildUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "reportUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+          EOF
+          allure generate allure-results --clean -o allure-report
+
+      - name: Upload the Allure report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-report-${{ github.run_number }}
+          path: allure-report
+          retention-days: 30
+
+      - name: Upload the raw Allure results
+        # The report is the readable form; the raw results are what a later run needs to
+        # rebuild history if Pages publishing fails.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-${{ github.run_number }}
+          path: allure-results
+          retention-days: 7
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ github.run_number }}
+          path: target/screenshots
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload logs
+        # Includes the per-device log files the RoutingAppender writes, plus the Appium
+        # server log - between them they cover both sides of a failed session.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ github.run_number }}
+          path: target/logs
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload screen recordings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: videos-${{ github.run_number }}
+          path: target/videos
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload the surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-${{ github.run_number }}
+          path: target/surefire-reports
+          if-no-files-found: ignore
+          retention-days: 7
+
+  publish-report:
+    name: Publish the Allure report to GitHub Pages
+    needs: test
+    if: always() && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      # Least privilege: this job writes one branch and needs nothing else.
+      contents: write
+
+    steps:
+      - name: Download the Allure report
+        uses: actions/download-artifact@v4
+        with:
+          name: allure-report-${{ github.run_number }}
+          path: allure-report
+
+      - name: Publish to the gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: allure-report
+          # keep_files preserves the history directory the next run reads back, which is
+          # what makes the trend chart accumulate instead of resetting each night.
+          keep_files: true
+          user_name: github-actions[bot]
+          user_email: github-actions[bot]@users.noreply.github.com
+          commit_message: 'Allure report for run #${{ github.run_number }}'
+
+# TODO: for a hardened setup, pin every third-party action to a full commit SHA rather than
+#       a tag - a tag can be moved, and a moved tag is an unreviewed change running with
+#       your repository token.

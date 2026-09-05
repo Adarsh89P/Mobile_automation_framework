@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.adarsh</groupId>
+    <artifactId>mobile-automation-framework</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>mobile-automation-framework</name>
+    <description>Appium 2.x mobile automation framework (Android-first, iOS-ready)</description>
+
+    <properties>
+        <!-- Java 17 is the contract: the CI workflow provisions JDK 17, so a higher
+         release value compiles locally on a newer JDK and then fails the build on the
+         runner. Change both together or not at all. -->
+        <maven.compiler.release>17</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Dependency versions -->
+        <appium.java.client.version>9.5.0</appium.java.client.version>
+        <selenium.version>4.34.0</selenium.version>
+        <testng.version>7.10.2</testng.version>
+        <allure.version>2.29.0</allure.version>
+        <aspectj.version>1.9.24</aspectj.version>
+        <owner.version>1.0.12</owner.version>
+        <jackson.version>2.17.2</jackson.version>
+        <javafaker.version>1.0.2</javafaker.version>
+        <log4j2.version>2.23.1</log4j2.version>
+        <commons.io.version>2.16.1</commons.io.version>
+        <anthropic.sdk.version>2.34.0</anthropic.sdk.version>
+
+        <!-- Plugin versions -->
+        <compiler.plugin.version>3.13.0</compiler.plugin.version>
+        <surefire.plugin.version>3.2.5</surefire.plugin.version>
+        <allure.maven.version>2.18.0</allure.maven.version>
+
+        <!-- Runtime switches: overridable from the CLI, e.g. -Dsuite=regression -->
+        <suite>smoke</suite>
+        <platform>android</platform>
+        <execution.target>local</execution.target>
+        <ai.enabled>false</ai.enabled>
+    </properties>
+
+    <!--
+      java-client declares Selenium with an OPEN VERSION RANGE ([4.34.0, 5.0)), so an
+      unmanaged build silently resolves whatever Selenium released most recently — and
+      Selenium keeps deleting classes java-client still implements. AndroidDriver implements
+      org.openqa.selenium.html5.LocationContext, and 4.34.0 is the LAST release that still
+      ships it; on 4.35.0+ every `new AndroidDriver(...)` fails to compile in *our* code, not
+      theirs. dependencyManagement overrides the range and pins that known-good version.
+      Revisit this pin whenever java-client is upgraded.
+    -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.seleniumhq.selenium</groupId>
+                <artifactId>selenium-api</artifactId>
+                <version>${selenium.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.seleniumhq.selenium</groupId>
+                <artifactId>selenium-remote-driver</artifactId>
+                <version>${selenium.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.seleniumhq.selenium</groupId>
+                <artifactId>selenium-support</artifactId>
+                <version>${selenium.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.seleniumhq.selenium</groupId>
+                <artifactId>selenium-java</artifactId>
+                <version>${selenium.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!--
+          Appium 2.x client. Selenium arrives transitively and is deliberately NOT pinned:
+          java-client is compiled against one specific Selenium minor, and overriding it
+          breaks at class level (e.g. org.openqa.selenium.ContextAware moving between
+          releases). `mvn dependency:tree` shows the version actually in use.
+        -->
+        <dependency>
+            <groupId>io.appium</groupId>
+            <artifactId>java-client</artifactId>
+            <version>${appium.java.client.version}</version>
+        </dependency>
+
+        <!-- Test runner -->
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+        </dependency>
+
+        <!-- Reporting -->
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-testng</artifactId>
+            <version>${allure.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-attachments</artifactId>
+            <version>${allure.version}</version>
+        </dependency>
+
+        <!-- Config binding -->
+        <dependency>
+            <groupId>org.aeonbits.owner</groupId>
+            <artifactId>owner</artifactId>
+            <version>${owner.version}</version>
+        </dependency>
+
+        <!-- Test data -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.javafaker</groupId>
+            <artifactId>javafaker</artifactId>
+            <version>${javafaker.version}</version>
+            <exclusions>
+                <!-- javafaker ships an ancient snakeyaml that clashes with other consumers -->
+                <exclusion>
+                    <groupId>org.yaml</groupId>
+                    <artifactId>snakeyaml</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>2.2</version>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>${log4j2.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>${log4j2.version}</version>
+        </dependency>
+        <!-- Routes Selenium/Appium's SLF4J output into Log4j2 -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-slf4j2-impl</artifactId>
+            <version>${log4j2.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>${commons.io.version}</version>
+        </dependency>
+
+        <!--
+          Official Anthropic SDK, used only by the flag-gated AI layer (-Dai.enabled=true).
+          It is on the test classpath unconditionally because Maven has no clean way to make a
+          dependency conditional, but nothing in com.adarsh.ai is constructed unless the flag
+          is on AND ANTHROPIC_API_KEY is present - so a normal run never touches it.
+        -->
+        <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>${anthropic.sdk.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${compiler.plugin.version}</version>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${surefire.plugin.version}</version>
+                <configuration>
+                    <suiteXmlFiles>
+                        <suiteXmlFile>src/test/resources/suites/${suite}.xml</suiteXmlFile>
+                    </suiteXmlFiles>
+                    <!-- Allure's TestNG integration is wired by the AspectJ weaver at runtime -->
+                    <argLine>
+                        -javaagent:"${settings.localRepository}/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar"
+                        -Dfile.encoding=UTF-8
+                    </argLine>
+                    <systemPropertyVariables>
+                        <!-- log4j2.xml lives in config/ rather than the classpath root, so
+                             Log4j2 has to be told where it is. -->
+                        <log4j2.configurationFile>config/log4j2.xml</log4j2.configurationFile>
+                        <platform>${platform}</platform>
+                        <execution>${execution.target}</execution>
+                        <ai.enabled>${ai.enabled}</ai.enabled>
+                        <allure.results.directory>${project.basedir}/allure-results</allure.results.directory>
+                    </systemPropertyVariables>
+                    <!-- A failed mobile test must not abort the remaining devices -->
+                    <testFailureIgnore>false</testFailureIgnore>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.aspectj</groupId>
+                        <artifactId>aspectjweaver</artifactId>
+                        <version>${aspectj.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+
+            <plugin>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-maven</artifactId>
+                <version>${allure.maven.version}</version>
+                <configuration>
+                    <reportVersion>${allure.version}</reportVersion>
+                    <resultsDirectory>${project.basedir}/allure-results</resultsDirectory>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

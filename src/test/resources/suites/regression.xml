@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+
+<!--
+  Regression: the nightly suite. Everything except the device-capability tests,
+  which need emulator features (rotation, connectivity) that a shared CI machine
+  cannot always provide — those run in mobile-native.xml.
+-->
+<suite name="Regression" verbose="1" parallel="none">
+
+    <test name="Regression - Android">
+        <groups>
+            <run>
+                <include name="smoke"/>
+                <include name="regression"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="com.adarsh.tests.AppLaunchTest"/>
+            <class name="com.adarsh.tests.LoginTest"/>
+            <class name="com.adarsh.tests.CatalogTest"/>
+            <class name="com.adarsh.tests.CartTest"/>
+            <class name="com.adarsh.tests.CheckoutTest"/>
+            <class name="com.adarsh.tests.SessionTest"/>
+        </classes>
+    </test>
+
+</suite>

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+
+<!--
+  Parallel execution across devices.
+
+  parallel="tests" gives each <test> block its own thread, and each block carries the
+  parameters that must NOT be shared:
+
+    deviceName / udid  - which physical device or emulator to drive
+    systemPort         - the port for that session's UiAutomator2 server (Android)
+    wdaLocalPort       - the port for that session's WebDriverAgent (iOS)
+
+  Those ports are the whole reason this works. Two Android sessions sharing one
+  systemPort fight over the same socket and both fail intermittently - the classic
+  "it only breaks in parallel" bug. Each block below owns a distinct port.
+
+  thread-count must be >= the number of <test> blocks, or the extra blocks queue up
+  and run sequentially while looking parallel in the report.
+
+  TODO: replace the device names, versions and udids with your own (`adb devices -l`).
+-->
+<suite name="Parallel devices" verbose="1" parallel="tests" thread-count="3"
+       data-provider-thread-count="3">
+
+    <test name="Pixel 7 - API 34">
+        <parameter name="deviceName" value="Pixel_7_API_34"/>
+        <parameter name="platformVersion" value="14.0"/>
+        <parameter name="udid" value="emulator-5554"/>
+        <parameter name="systemPort" value="8201"/>
+        <groups>
+            <run><include name="smoke"/></run>
+        </groups>
+        <classes>
+            <class name="com.adarsh.tests.AppLaunchTest"/>
+            <class name="com.adarsh.tests.LoginTest"/>
+        </classes>
+    </test>
+
+    <test name="Pixel 5 - API 31">
+        <parameter name="deviceName" value="Pixel_5_API_31"/>
+        <parameter name="platformVersion" value="12.0"/>
+        <parameter name="udid" value="emulator-5556"/>
+        <parameter name="systemPort" value="8202"/>
+        <groups>
+            <run><include name="smoke"/></run>
+        </groups>
+        <classes>
+            <class name="com.adarsh.tests.AppLaunchTest"/>
+            <class name="com.adarsh.tests.LoginTest"/>
+        </classes>
+    </test>
+
+    <!--
+      iOS is configured but not executed in this repo - there is no macOS runner.
+      It is kept here so the parallel model is demonstrably platform-agnostic:
+      the only difference is wdaLocalPort instead of systemPort.
+    -->
+    <test name="iPhone 15 - iOS 17 (not executed)">
+        <parameter name="deviceName" value="iPhone 15"/>
+        <parameter name="platformVersion" value="17.5"/>
+        <parameter name="wdaLocalPort" value="8101"/>
+        <parameter name="app" value="mydemo"/>
+        <groups>
+            <run><include name="smoke"/></run>
+        </groups>
+        <classes>
+            <class name="com.adarsh.tests.LoginTest"/>
+        </classes>
+    </test>
+
+</suite>
