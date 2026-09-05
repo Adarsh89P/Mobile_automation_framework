@@ -2,7 +2,7 @@
 
 **Appium 2 test automation for Android and iOS — built so a failure tells you what broke, not just that something did.**
 
-[![Mobile Tests](https://github.com/Adarsh89P/mobile-automation-framework/actions/workflows/mobile-tests.yml/badge.svg)](https://github.com/Adarsh89P/mobile-automation-framework/actions/workflows/mobile-tests.yml)
+[![Mobile Tests](https://github.com/Adarsh89P/Mobile_automation_framework/actions/workflows/mobile-tests.yml/badge.svg)](https://github.com/Adarsh89P/Mobile_automation_framework/actions/workflows/mobile-tests.yml)
 [![Java](https://img.shields.io/badge/Java-17-orange?logo=openjdk)](https://adoptium.net/)
 [![Appium](https://img.shields.io/badge/Appium-2.x-purple?logo=appium)](https://appium.io/)
 [![TestNG](https://img.shields.io/badge/TestNG-7.10-red)](https://testng.org/)
@@ -10,7 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 24 tests across three suites, driving two real applications on Android, with iOS wired but not
-executed. 8 page objects, 95% accessibility-id locators, zero `Thread.sleep`.
+executed. 7 page objects on a shared `BasePage`, 95% accessibility-id locators, zero `Thread.sleep`.
 
 ---
 
@@ -51,7 +51,7 @@ graph TD
 
     subgraph Pages["Page layer — the only place locators live"]
         P1["BasePage<br/>every interaction: click, type,<br/>scroll, gestures, waits"]
-        P2["8 page objects<br/>@AndroidFindBy / @iOSXCUITFindBy"]
+        P2["7 page objects<br/>@AndroidFindBy / @iOSXCUITFindBy"]
     end
 
     subgraph Support["Support"]
@@ -207,12 +207,15 @@ you prefer your own (faster debug loop), start it and pass `-Dappium.server.reus
 
 ### 4. Apps under test
 
-`ApiDemos-debug.apk` is committed — the smoke suite runs straight after a clone. The 32 MB Sauce
-Labs demo app is fetched on demand:
+`ApiDemos-debug.apk` (4.7 MB) is committed. The 32 MB Sauce Labs demo app is gitignored and must
+be fetched before the first run — the smoke suite drives My Demo App, so this step is not optional:
 
 ```bash
 ./scripts/fetch-apps.sh
 ```
+
+Only `DeviceInteractionTest` and `GestureTest` run on the committed ApiDemos build; every other
+test needs the fetched app. CI runs this script on every job, so it only bites a fresh clone.
 
 ### 5. Point the config at your device
 
@@ -320,7 +323,7 @@ A parameterised `Jenkinsfile` mirrors it, because most enterprise device labs ar
 | Decision | Trade-off accepted |
 |---|---|
 | One session per test | ~15s per test. Bought: order-independence and safe parallelism |
-| Accessibility id first, XPath never | Needs testIDs in the app. 0 XPath locators; 95% accessibility id |
+| Accessibility id first, XPath only as a fallback | Needs testIDs in the app. 95% of declared locators are accessibility ids; zero XPath in any page object's `@FindBy`. One XPath remains in `BasePage.scrollIntoViewByGesture`, the platform-neutral scroll fallback, and the AI healer may propose one as a last resort |
 | `UiScrollable` for Android scrolling | Android-specific. One round trip, and it knows when the list ends |
 | One `CheckoutPage`, not four | Less granular. It is a wizard you cannot enter halfway; four classes is ceremony |
 | Explicit waits only, implicit set to zero | More code per lookup. Implicit waits silently corrupt every explicit wait they overlap |

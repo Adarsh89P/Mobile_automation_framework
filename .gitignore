@@ -26,7 +26,7 @@ logs/
 local.properties
 
 # --- App binaries ---
-# ApiDemos-debug.apk (4.7 MB) IS committed, so a fresh clone can run the smoke suite.
+# ApiDemos-debug.apk (4.7 MB) IS committed; it backs the ApiDemos device tests only.
 # Larger binaries are fetched on demand by scripts/fetch-apps.sh.
 src/test/resources/apps/Android-MyDemoAppRN.apk
 src/test/resources/apps/*.part
